@@ -170,3 +170,8 @@ main {
   margin: 1rem;
   color: #7c7a80;
 }
+
+.form-group {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
