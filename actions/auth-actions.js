@@ -1,7 +1,8 @@
 'use server'
 
-import { hashUserPassword } from '@/lib/hash'
-import { createUser } from '@/lib/user'
+import { createAuthSession, destroySession } from '@/lib/auth'
+import { hashUserPassword, verifyPassword } from '@/lib/hash'
+import { createUser, getUserByEmail } from '@/lib/user'
 import { redirect } from 'next/navigation'
 
 export const signup = async (prevState, formData) => {
@@ -19,28 +20,68 @@ export const signup = async (prevState, formData) => {
       : undefined,
     password: !passwordRegex.test(password)
       ? 'Please, use at least 5 symbols'
-      : undefined,
+      : undefined
   }
 
   if (Object.values(errors).every((error) => error === undefined)) {
     const hashedPssword = hashUserPassword(password)
     try {
-      createUser(email, hashedPssword)
+      const userId = createUser(email, hashedPssword)
+      await createAuthSession(userId)
+      redirect('/training')
     } catch (error) {
       if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
         return {
           errors: {
-            email: 'Such email already exists',
-          },
+            email: 'Such email already exists'
+          }
         }
       }
       throw error
     }
-
-    redirect('/training')
   } else {
     return {
-      errors,
+      errors
     }
   }
+}
+
+export const login = async (prevState, formData) => {
+  const email = formData.get('email').trim()
+  const password = formData.get('password').trim()
+
+  const existingUser = getUserByEmail(email)
+
+  if (!existingUser) {
+    return {
+      errors: {
+        email: 'Could not authenticate user. Please, check your email.'
+      }
+    }
+  }
+
+  const isValidPassword = verifyPassword(existingUser.password, password)
+
+  if (!isValidPassword) {
+    return {
+      errors: {
+        password: 'Could not authenticate user. Please, check your password.'
+      }
+    }
+  }
+  await createAuthSession(existingUser.id)
+  redirect('/training')
+}
+
+export const auth = async (mode, prevState, formData) => {
+  if (mode === 'login') {
+    return login(prevState, formData)
+  }
+
+  return signup(prevState, formData)
+}
+
+export const logout = async () => {
+  await destroySession()
+  redirect('/')
 }
